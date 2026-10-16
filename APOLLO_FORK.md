@@ -10,27 +10,24 @@ This fork carries fixes that Apollo needs before they ship upstream. It is built
 
 Do not work around missing `Notion-Version` headers with a global `OPENAPI_MCP_HEADERS` entry. A global header overrides the per-operation defaults, so the page-markdown endpoints (pinned to `2026-03-11`) would get the wrong version.
 
+## Branches
+
+`main` mirrors upstream and is never modified. Apollo patches live on `mgarapich/aieng-663-comment-notion-version`, based on upstream `v2.5.2`. This keeps upstream syncs to a fast-forward of `main`.
+
 ## Deployment
 
-Merging here does not change the running MCP. `build/Dockerfile.stdio` in apolloio/mcp-proxy clones this repository at a pinned commit (`NOTION_MCP_REF`), builds it, and installs the packed tarball globally. To deploy a change, bump `NOTION_MCP_REF` to the merged `main` commit in a mcp-proxy PR, then roll out the `notion` release.
+`build/Dockerfile.stdio` in apolloio/mcp-proxy clones this repository at a pinned commit on the patch branch (`NOTION_MCP_REF`), builds it, and installs the packed tarball globally. To deploy a change, push it to the patch branch, bump `NOTION_MCP_REF` to the new commit in a mcp-proxy PR, then roll out the `notion` release.
 
 ## Syncing upstream
 
-Add the upstream remote once:
-
 ```bash
-git remote add upstream https://github.com/makenotion/notion-mcp-server.git
-```
-
-For each upstream bump, use a short-lived branch and PR. Do not rewrite `main`:
-
-```bash
+git remote add upstream https://github.com/makenotion/notion-mcp-server.git  # once
 git fetch upstream --tags
-git switch main
-git pull --ff-only origin main
-git switch -c sync-upstream-YYYYMMDD
-git merge --no-ff upstream/main
+git switch main && git merge --ff-only upstream/main && git push origin main
+git switch -c apollo-<upstream-tag> <upstream-tag>
+git cherry-pick <patch commits from the current patch branch>
 npm ci && npm test && npm run build
+git push -u origin apollo-<upstream-tag>
 ```
 
-Before merging, remove any patch from the table above that upstream now includes, and check that every operation in `scripts/notion-openapi.json` still declares `Notion-Version` (`notion-version-coverage.test.ts` enforces this).
+Use a new branch per upstream base instead of rebasing the current one: mcp-proxy pins a commit on it, and rewriting the branch would make that commit unreachable. Skip any patch upstream now includes, check that every operation in `scripts/notion-openapi.json` still declares `Notion-Version` (`notion-version-coverage.test.ts` enforces this), then bump `NOTION_MCP_REF` and update this file.
